@@ -55,6 +55,13 @@ cargo build --release --target x86_64-pc-windows-gnu
 Logiciel fourni « tel quel », sans garantie. Il modifie des réglages système de
 **votre propre machine**. Utilisez la fonction de restauration en cas de doute.
 
+## Développement
+
+Ce projet a été développé avec l'assistance de l'intelligence artificielle
+**Claude** (Anthropic) : spécifications, conception et génération du code Rust.
+Les choix de conception, la validation et les tests restent sous la
+responsabilité de l'auteur du dépôt.
+
 ## Licence
 
 MIT.
