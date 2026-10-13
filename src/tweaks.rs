@@ -80,7 +80,10 @@ pub fn catalog() -> Vec<Tweak> {
             impact: "Stoppe l'analyse de compatibilite planifiee. Sans effet sur l'usage courant.",
             requires_reboot: false,
             action: Action::ScheduledTasks(vec![
+                // Nom classique (Win10 / anciens Win11) ...
                 r"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
+                // ... et nom renomme sur les Win11 recents (build 26xxx).
+                r"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser Exp",
                 r"\Microsoft\Windows\Application Experience\ProgramDataUpdater",
                 r"\Microsoft\Windows\Application Experience\StartupAppTask",
             ]),
