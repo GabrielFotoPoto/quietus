@@ -5,6 +5,14 @@ use anyhow::{Context, Result};
 use winreg::enums::*;
 use winreg::RegKey;
 
+/// Verifie grossierement les droits administrateur en tentant d'ouvrir en ecriture
+/// une cle machine. Sans admin, les reglages HKLM echoueront.
+pub fn is_elevated() -> bool {
+    RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey_with_flags(r"SOFTWARE\Microsoft", KEY_SET_VALUE)
+        .is_ok()
+}
+
 fn root(hive: Hive) -> RegKey {
     match hive {
         Hive::Hklm => RegKey::predef(HKEY_LOCAL_MACHINE),

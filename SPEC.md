@@ -19,7 +19,8 @@ et laisser l'utilisateur décider.
 - **Langage / cible** : Rust, `x86_64-pc-windows-gnu` (exécutable Windows natif).
 - **Privilèges** : manifeste `requireAdministrator` embarqué (UAC).
 - **Registre** : crate `winreg`.
-- **UI** : TUI `ratatui` + `crossterm` (v1). GUI `egui` envisagée en v2.
+- **UI** : interface graphique `egui` / `eframe` (exécutable autonome, sans
+  runtime externe). La TUI initiale a été retirée au profit du graphique.
 - **Sauvegarde** : état antérieur de chaque valeur en JSON horodaté sous
   `%LOCALAPPDATA%\Quietus\backups`.
 
@@ -31,11 +32,12 @@ La détection d'état, l'application et l'annulation en découlent.
 
 ## Périmètre
 
-- **v1** : réglages Sûr + Modéré, tout par le registre (y compris type de
-  démarrage des services), 100 % réversible.
-- **v1.1** : tâches planifiées (CEIP) via Planificateur de tâches.
-- **v2** : interface graphique (egui), point de restauration système, profils.
-- **Hors périmètre v1** : blocage réseau des domaines Microsoft (risque de
+- **v0.1** : réglages Sûr + Modéré, tout par le registre (y compris type de
+  démarrage des services), 100 % réversible — interface terminal (retirée).
+- **v0.2** : interface graphique (egui / eframe).
+- **v1.1 (à venir)** : tâches planifiées (CEIP) via Planificateur de tâches.
+- **v2 (à venir)** : point de restauration système, profils.
+- **Hors périmètre** : blocage réseau des domaines Microsoft (risque de
   perturber Windows Update / Store) — écarté par choix.
 
 ## Limites assumées

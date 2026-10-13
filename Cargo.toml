@@ -1,14 +1,13 @@
 [package]
 name = "quietus"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Quietus — gestionnaire de telemetrie Windows 11, controle par l'utilisateur, reversible."
 license = "MIT"
 
 [dependencies]
 winreg = "0.52"
-ratatui = "0.29"
-crossterm = "0.28"
+eframe = "0.29"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
@@ -21,4 +20,3 @@ embed-manifest = "1.4"
 opt-level = "z"
 lto = true
 strip = true
-panic = "abort"

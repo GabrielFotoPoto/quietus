@@ -30,6 +30,15 @@ pub enum Category {
 }
 
 impl Category {
+    /// Toutes les categories, pour l'affichage des filtres.
+    pub const ALL: [Category; 5] = [
+        Category::TelemetrieCoeur,
+        Category::RapportsEtRetours,
+        Category::PubliciteEtPerso,
+        Category::ViePriveeUsage,
+        Category::Localisation,
+    ];
+
     pub fn label(self) -> &'static str {
         match self {
             Category::TelemetrieCoeur => "Telemetrie coeur",
