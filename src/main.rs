@@ -6,6 +6,7 @@ mod backup;
 mod gui;
 mod model;
 mod registry;
+mod tasks;
 mod tweaks;
 
 fn main() -> eframe::Result {

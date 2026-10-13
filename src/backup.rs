@@ -1,21 +1,29 @@
 //! Sauvegarde et restauration : avant toute modification, on enregistre l'etat
-//! anterieur de chaque valeur de registre, pour pouvoir tout annuler.
+//! anterieur (valeurs de registre ou etat des taches), pour pouvoir tout annuler.
 
-use crate::model::{Hive, RegData, Tweak};
+use crate::model::{Action, Hive, RegData, Tweak};
+use crate::tasks::{self, TaskStatus};
 use crate::registry;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// Etat anterieur d'une operation elementaire.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct OpBackup {
-    pub hive: Hive,
-    pub subkey: String,
-    pub name: String,
-    /// La valeur existait-elle avant notre intervention ?
-    pub existed: bool,
-    /// Sa valeur precedente, le cas echeant.
-    pub previous: Option<RegData>,
+pub enum OpBackup {
+    Registry {
+        hive: Hive,
+        subkey: String,
+        name: String,
+        /// La valeur existait-elle avant notre intervention ?
+        existed: bool,
+        previous: Option<RegData>,
+    },
+    Task {
+        path: String,
+        /// La tache etait-elle active avant notre intervention ?
+        was_enabled: bool,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -38,18 +46,30 @@ fn backup_dir() -> Result<PathBuf> {
     Ok(dir)
 }
 
-/// Capture l'etat courant des valeurs touchees par un reglage, avant application.
+/// Capture l'etat courant des elements touches par un reglage, avant application.
 pub fn capture(tweak: &Tweak) -> Result<TweakBackup> {
     let mut ops = Vec::new();
-    for op in &tweak.ops {
-        let previous = registry::read(op.hive, op.subkey, op.name)?;
-        ops.push(OpBackup {
-            hive: op.hive,
-            subkey: op.subkey.to_string(),
-            name: op.name.to_string(),
-            existed: previous.is_some(),
-            previous,
-        });
+    match &tweak.action {
+        Action::Registry(reg_ops) => {
+            for op in reg_ops {
+                let previous = registry::read(op.hive, op.subkey, op.name)?;
+                ops.push(OpBackup::Registry {
+                    hive: op.hive,
+                    subkey: op.subkey.to_string(),
+                    name: op.name.to_string(),
+                    existed: previous.is_some(),
+                    previous,
+                });
+            }
+        }
+        Action::ScheduledTasks(paths) => {
+            for p in paths {
+                ops.push(OpBackup::Task {
+                    path: p.to_string(),
+                    was_enabled: tasks::status(p) == TaskStatus::Enabled,
+                });
+            }
+        }
     }
     Ok(TweakBackup {
         tweak_id: tweak.id.to_string(),
@@ -72,13 +92,29 @@ pub fn save_session(tweaks: Vec<TweakBackup>) -> Result<PathBuf> {
 /// Restaure l'etat anterieur d'un reglage a partir de sa sauvegarde.
 pub fn restore(tb: &TweakBackup) -> Result<()> {
     for op in &tb.ops {
-        if op.existed {
-            if let Some(prev) = &op.previous {
-                registry::write(op.hive, &op.subkey, &op.name, prev)?;
+        match op {
+            OpBackup::Registry {
+                hive,
+                subkey,
+                name,
+                existed,
+                previous,
+            } => {
+                if *existed {
+                    if let Some(prev) = previous {
+                        registry::write(*hive, subkey, name, prev)?;
+                    }
+                } else {
+                    // La valeur n'existait pas : on la retire pour revenir a l'origine.
+                    registry::delete_value(*hive, subkey, name)?;
+                }
             }
-        } else {
-            // La valeur n'existait pas : on la retire pour revenir a l'origine.
-            registry::delete_value(op.hive, &op.subkey, &op.name)?;
+            OpBackup::Task { path, was_enabled } => {
+                // On ne reactive que ce qui etait actif ; sinon on laisse desactive/absent.
+                if *was_enabled {
+                    let _ = tasks::enable(path);
+                }
+            }
         }
     }
     Ok(())

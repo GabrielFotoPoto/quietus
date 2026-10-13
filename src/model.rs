@@ -76,6 +76,16 @@ pub struct RegOp {
     pub disable: RegData,
 }
 
+/// Mecanisme par lequel un reglage agit.
+#[derive(Clone, Debug)]
+pub enum Action {
+    /// Modification d'une ou plusieurs valeurs de registre.
+    Registry(Vec<RegOp>),
+    /// Desactivation de taches planifiees (chemin complet, p. ex.
+    /// `\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser`).
+    ScheduledTasks(Vec<&'static str>),
+}
+
 /// Etat courant d'un reglage, calcule en lisant le registre.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TweakState {
@@ -99,5 +109,5 @@ pub struct Tweak {
     /// Ce que sa desactivation implique concretement pour l'utilisateur.
     pub impact: &'static str,
     pub requires_reboot: bool,
-    pub ops: Vec<RegOp>,
+    pub action: Action,
 }

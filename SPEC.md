@@ -35,7 +35,8 @@ La détection d'état, l'application et l'annulation en découlent.
 - **v0.1** : réglages Sûr + Modéré, tout par le registre (y compris type de
   démarrage des services), 100 % réversible — interface terminal (retirée).
 - **v0.2** : interface graphique (egui / eframe).
-- **v1.1 (à venir)** : tâches planifiées (CEIP) via Planificateur de tâches.
+- **v0.3** : tâches planifiées (CEIP, compatibilité, feedback) via les cmdlets
+  `Get/Disable/Enable-ScheduledTask` (sortie non localisée).
 - **v2 (à venir)** : point de restauration système, profils.
 - **Hors périmètre** : blocage réseau des domaines Microsoft (risque de
   perturber Windows Update / Store) — écarté par choix.
