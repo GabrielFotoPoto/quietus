@@ -6,6 +6,8 @@ use crate::{backup, registry, tweaks};
 use eframe::egui;
 use egui::Color32;
 
+const ORANGE: Color32 = Color32::from_rgb(210, 170, 60);
+
 struct Row {
     tweak: Tweak,
     state: TweakState,
@@ -15,9 +17,10 @@ struct Row {
 pub struct QuietusApp {
     rows: Vec<Row>,
     focused: usize,
-    filter: Option<Category>,
     status: String,
     elevated: bool,
+    /// La fenetre de confirmation avant application est-elle ouverte ?
+    confirm_open: bool,
 }
 
 impl QuietusApp {
@@ -36,9 +39,9 @@ impl QuietusApp {
         Self {
             rows,
             focused: 0,
-            filter: None,
             status: "Cochez des reglages, puis « Appliquer la selection ».".into(),
             elevated: registry::is_elevated(),
+            confirm_open: false,
         }
     }
 
@@ -47,6 +50,18 @@ impl QuietusApp {
             r.state = tweaks::detect(&r.tweak);
         }
         self.status = "Etats actualises.".into();
+    }
+
+    fn set_category(&mut self, cat: Category, selected: bool) {
+        for r in &mut self.rows {
+            if r.tweak.category == cat {
+                r.selected = selected;
+            }
+        }
+    }
+
+    fn selected_count(&self) -> usize {
+        self.rows.iter().filter(|r| r.selected).count()
     }
 
     fn apply_selected(&mut self) {
@@ -106,12 +121,65 @@ impl QuietusApp {
             Err(e) => self.status = format!("Lecture de sauvegarde impossible : {e}"),
         }
     }
+
+    fn confirm_window(&mut self, ctx: &egui::Context) {
+        if !self.confirm_open {
+            return;
+        }
+        let selected: Vec<&'static str> = self
+            .rows
+            .iter()
+            .filter(|r| r.selected)
+            .map(|r| r.tweak.name)
+            .collect();
+        let reboot = self
+            .rows
+            .iter()
+            .any(|r| r.selected && r.tweak.requires_reboot);
+        let mut do_apply = false;
+
+        egui::Window::new("Confirmer l'application")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                ui.label(format!(
+                    "{} reglage(s) vont etre desactives :",
+                    selected.len()
+                ));
+                ui.add_space(4.0);
+                egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                    for n in &selected {
+                        ui.label(format!("•  {n}"));
+                    }
+                });
+                if reboot {
+                    ui.add_space(4.0);
+                    ui.colored_label(ORANGE, "Un redemarrage sera conseille apres application.");
+                }
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.button("Confirmer").clicked() {
+                        do_apply = true;
+                    }
+                    if ui.button("Annuler").clicked() {
+                        self.confirm_open = false;
+                    }
+                });
+            });
+
+        if do_apply {
+            self.apply_selected();
+            self.confirm_open = false;
+        }
+    }
 }
 
 fn state_badge(ui: &mut egui::Ui, s: TweakState) {
     let (txt, col) = match s {
         TweakState::Disabled => ("desactive", Color32::from_rgb(80, 180, 80)),
-        TweakState::Enabled => ("actif", Color32::from_rgb(210, 170, 60)),
+        TweakState::Enabled => ("actif", ORANGE),
         TweakState::Unknown => ("inconnu", Color32::GRAY),
     };
     ui.label(egui::RichText::new(txt).color(col).monospace());
@@ -137,8 +205,16 @@ impl eframe::App for QuietusApp {
         egui::TopBottomPanel::bottom("bottom").show(ctx, |ui| {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
-                if ui.button("Appliquer la selection").clicked() {
-                    self.apply_selected();
+                let n = self.selected_count();
+                if ui
+                    .button(format!("Appliquer la selection ({n})"))
+                    .clicked()
+                {
+                    if n > 0 {
+                        self.confirm_open = true;
+                    } else {
+                        self.status = "Rien de selectionne.".into();
+                    }
                 }
                 if ui.button("Tout restaurer").clicked() {
                     self.restore_latest();
@@ -150,20 +226,6 @@ impl eframe::App for QuietusApp {
             ui.add_space(2.0);
             ui.label(&self.status);
             ui.add_space(4.0);
-        });
-
-        egui::SidePanel::left("cats").resizable(false).show(ctx, |ui| {
-            ui.add_space(6.0);
-            ui.label(egui::RichText::new("Categories").strong());
-            ui.add_space(4.0);
-            if ui.selectable_label(self.filter.is_none(), "Toutes").clicked() {
-                self.filter = None;
-            }
-            for c in Category::ALL {
-                if ui.selectable_label(self.filter == Some(c), c.label()).clicked() {
-                    self.filter = Some(c);
-                }
-            }
         });
 
         egui::SidePanel::right("detail")
@@ -181,10 +243,7 @@ impl eframe::App for QuietusApp {
                         state_badge(ui, r.state);
                     });
                     if r.tweak.requires_reboot {
-                        ui.colored_label(
-                            Color32::from_rgb(210, 170, 60),
-                            "Redemarrage requis apres application.",
-                        );
+                        ui.colored_label(ORANGE, "Redemarrage requis apres application.");
                     }
                     ui.add_space(10.0);
                     ui.label(egui::RichText::new("Ce que ca fait").strong());
@@ -197,24 +256,41 @@ impl eframe::App for QuietusApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for i in 0..self.rows.len() {
-                    let visible = match self.filter {
-                        None => true,
-                        Some(c) => self.rows[i].tweak.category == c,
-                    };
-                    if !visible {
+                for cat in Category::ALL {
+                    let has_rows = self.rows.iter().any(|r| r.tweak.category == cat);
+                    if !has_rows {
                         continue;
                     }
-                    ui.horizontal(|ui| {
-                        ui.checkbox(&mut self.rows[i].selected, "");
-                        state_badge(ui, self.rows[i].state);
-                        let name = self.rows[i].tweak.name;
-                        if ui.selectable_label(self.focused == i, name).clicked() {
-                            self.focused = i;
-                        }
-                    });
+                    egui::CollapsingHeader::new(egui::RichText::new(cat.label()).strong())
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                if ui.small_button("Tout cocher").clicked() {
+                                    self.set_category(cat, true);
+                                }
+                                if ui.small_button("Tout decocher").clicked() {
+                                    self.set_category(cat, false);
+                                }
+                            });
+                            for i in 0..self.rows.len() {
+                                if self.rows[i].tweak.category != cat {
+                                    continue;
+                                }
+                                ui.horizontal(|ui| {
+                                    ui.checkbox(&mut self.rows[i].selected, "");
+                                    state_badge(ui, self.rows[i].state);
+                                    let name = self.rows[i].tweak.name;
+                                    if ui.selectable_label(self.focused == i, name).clicked() {
+                                        self.focused = i;
+                                    }
+                                });
+                            }
+                            ui.add_space(4.0);
+                        });
                 }
             });
         });
+
+        self.confirm_window(ctx);
     }
 }

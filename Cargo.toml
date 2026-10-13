@@ -1,6 +1,6 @@
 [package]
 name = "quietus"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
 description = "Quietus — gestionnaire de telemetrie Windows 11, controle par l'utilisateur, reversible."
 license = "MIT"

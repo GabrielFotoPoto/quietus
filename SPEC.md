@@ -37,6 +37,8 @@ La détection d'état, l'application et l'annulation en découlent.
 - **v0.2** : interface graphique (egui / eframe).
 - **v0.3** : tâches planifiées (CEIP, compatibilité, feedback) via les cmdlets
   `Get/Disable/Enable-ScheduledTask` (sortie non localisée).
+- **v0.4** : regroupement par catégorie (sections repliables), « tout cocher /
+  décocher » par catégorie, fenêtre de confirmation récapitulative avant application.
 - **v2 (à venir)** : point de restauration système, profils.
 - **Hors périmètre** : blocage réseau des domaines Microsoft (risque de
   perturber Windows Update / Store) — écarté par choix.

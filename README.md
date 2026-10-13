@@ -25,10 +25,12 @@ les réglages au niveau machine.
 quietus.exe
 ```
 
-Une fenêtre s'ouvre : la liste des réglages (avec leur état actuel), un filtre par
-catégorie à gauche, le détail du réglage sélectionné à droite. Cochez ce que vous
-voulez désactiver puis cliquez sur **Appliquer la sélection**. Le bouton
-**Tout restaurer** remet le dernier lot de réglages à son état antérieur.
+Une fenêtre s'ouvre : les réglages sont regroupés par catégorie dans des sections
+repliables (chacune avec un état et des boutons **Tout cocher / décocher**), et le
+détail du réglage sélectionné s'affiche à droite. Cochez ce que vous voulez
+désactiver puis cliquez sur **Appliquer la sélection** : une fenêtre récapitule la
+liste avant confirmation. Le bouton **Tout restaurer** remet le dernier lot de
+réglages à son état antérieur.
 
 Les sauvegardes sont écrites dans `%LOCALAPPDATA%\Quietus\backups`.
 
