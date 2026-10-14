@@ -3,6 +3,7 @@
 //! localisee (noms d'enumeration .NET), contrairement a `schtasks`.
 
 use anyhow::{Context, Result};
+use std::collections::HashMap;
 use std::os::windows::process::CommandExt;
 use std::process::Command;
 
@@ -45,7 +46,20 @@ fn powershell(script: &str) -> Result<std::process::Output> {
         .context("lancement de PowerShell")
 }
 
-/// Lit l'etat courant d'une tache planifiee.
+/// Traduit l'etat .NET (non localise) renvoye par PowerShell en `TaskStatus`.
+/// Une chaine vide signifie que la tache est absente de ce Windows.
+fn parse_state(s: &str) -> TaskStatus {
+    if s.is_empty() {
+        TaskStatus::Absent
+    } else if s.eq_ignore_ascii_case("Disabled") {
+        TaskStatus::Disabled
+    } else {
+        // Ready, Running, etc.
+        TaskStatus::Enabled
+    }
+}
+
+/// Lit l'etat courant d'une seule tache planifiee (utilise a la sauvegarde).
 pub fn status(path: &str) -> TaskStatus {
     let (folder, name) = split(path);
     let script = format!(
@@ -55,15 +69,43 @@ pub fn status(path: &str) -> TaskStatus {
         Ok(o) => o,
         Err(_) => return TaskStatus::Unknown,
     };
-    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if s.is_empty() {
-        TaskStatus::Absent
-    } else if s.eq_ignore_ascii_case("Disabled") {
-        TaskStatus::Disabled
-    } else {
-        // Ready, Running, etc.
-        TaskStatus::Enabled
+    parse_state(String::from_utf8_lossy(&out.stdout).trim())
+}
+
+/// Lit l'etat de plusieurs taches en **un seul** lancement de PowerShell.
+///
+/// Evite un demarrage de processus par tache (plusieurs centaines de ms chacun)
+/// et donc le micro-gel de l'interface lors de l'actualisation des etats.
+/// Les chemins absents de la reponse sont consideres `Unknown` par l'appelant.
+pub fn statuses(paths: &[&str]) -> HashMap<String, TaskStatus> {
+    let mut result = HashMap::new();
+    if paths.is_empty() {
+        return result;
     }
+    // Liste de chemins litterale, entre apostrophes (aucun chemin ne contient
+    // d'apostrophe). PowerShell construit une table etat-par-chemin complet,
+    // puis emet « chemin<TAB>etat » pour chacun de nos chemins.
+    let list = paths
+        .iter()
+        .map(|p| format!("'{p}'"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let script = format!(
+        "$ErrorActionPreference='SilentlyContinue'; \
+         $m=@{{}}; Get-ScheduledTask | ForEach-Object {{ $m[$_.TaskPath + $_.TaskName] = $_.State }}; \
+         @({list}) | ForEach-Object {{ \"$_`t$($m[$_])\" }}"
+    );
+    let out = match powershell(&script) {
+        Ok(o) => o,
+        Err(_) => return result, // table vide : tout sera lu comme Unknown
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    for line in text.lines() {
+        if let Some((path, state)) = line.trim_end_matches('\r').split_once('\t') {
+            result.insert(path.to_string(), parse_state(state.trim()));
+        }
+    }
+    result
 }
 
 /// Desactive une tache (sans effet si absente). Best-effort.

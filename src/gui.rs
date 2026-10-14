@@ -25,10 +25,11 @@ pub struct QuietusApp {
 
 impl QuietusApp {
     pub fn new() -> Self {
+        let states = tweaks::task_states();
         let rows = tweaks::catalog()
             .into_iter()
             .map(|t| {
-                let state = tweaks::detect(&t);
+                let state = tweaks::detect(&t, &states);
                 Row {
                     tweak: t,
                     state,
@@ -46,8 +47,9 @@ impl QuietusApp {
     }
 
     fn refresh(&mut self) {
+        let states = tweaks::task_states();
         for r in &mut self.rows {
-            r.state = tweaks::detect(&r.tweak);
+            r.state = tweaks::detect(&r.tweak, &states);
         }
         self.status = "Etats actualises.".into();
     }
@@ -66,28 +68,36 @@ impl QuietusApp {
 
     fn apply_selected(&mut self) {
         let mut backups = Vec::new();
-        let mut count = 0;
+        let mut applied = Vec::new();
         let mut reboot = false;
-        for row in self.rows.iter_mut().filter(|r| r.selected) {
-            match backup::capture(&row.tweak) {
+        for i in 0..self.rows.len() {
+            if !self.rows[i].selected {
+                continue;
+            }
+            match backup::capture(&self.rows[i].tweak) {
                 Ok(b) => backups.push(b),
                 Err(e) => {
-                    self.status = format!("Sauvegarde impossible pour {} : {e}", row.tweak.id);
+                    self.status = format!("Sauvegarde impossible pour {} : {e}", self.rows[i].tweak.id);
                     return;
                 }
             }
-            if let Err(e) = tweaks::apply(&row.tweak) {
-                self.status = format!("Echec sur {} (droits admin ?) : {e}", row.tweak.id);
+            if let Err(e) = tweaks::apply(&self.rows[i].tweak) {
+                self.status = format!("Echec sur {} (droits admin ?) : {e}", self.rows[i].tweak.id);
                 return;
             }
-            row.state = tweaks::detect(&row.tweak);
-            row.selected = false;
-            reboot |= row.tweak.requires_reboot;
-            count += 1;
+            reboot |= self.rows[i].tweak.requires_reboot;
+            applied.push(i);
         }
+        let count = applied.len();
         if count == 0 {
             self.status = "Rien de selectionne.".into();
             return;
+        }
+        // Re-detection groupee : un seul appel PowerShell pour toutes les taches.
+        let states = tweaks::task_states();
+        for &i in &applied {
+            self.rows[i].state = tweaks::detect(&self.rows[i].tweak, &states);
+            self.rows[i].selected = false;
         }
         match backup::save_session(backups) {
             Ok(path) => {

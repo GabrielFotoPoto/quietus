@@ -5,6 +5,7 @@ use crate::model::*;
 use crate::registry;
 use crate::tasks::{self, TaskStatus};
 use anyhow::Result;
+use std::collections::HashMap;
 
 fn dword(hive: Hive, subkey: &'static str, name: &'static str, disable: u32) -> RegOp {
     RegOp {
@@ -208,8 +209,28 @@ pub fn catalog() -> Vec<Tweak> {
     ]
 }
 
+/// Tous les chemins de taches planifiees du catalogue, pour une requete groupee.
+pub fn all_task_paths() -> Vec<&'static str> {
+    catalog()
+        .iter()
+        .flat_map(|t| match &t.action {
+            Action::ScheduledTasks(paths) => paths.clone(),
+            Action::Registry(_) => Vec::new(),
+        })
+        .collect()
+}
+
+/// Lit en **un seul** appel PowerShell l'etat de toutes les taches du catalogue.
+/// A construire une fois avant une passe de `detect`.
+pub fn task_states() -> HashMap<String, TaskStatus> {
+    tasks::statuses(&all_task_paths())
+}
+
 /// Determine si un reglage est deja applique (telemetrie desactivee).
-pub fn detect(tweak: &Tweak) -> TweakState {
+///
+/// `task_states` est la table pre-calculee par [`task_states`] ; elle n'est
+/// consultee que pour les reglages de type tache planifiee.
+pub fn detect(tweak: &Tweak, task_states: &HashMap<String, TaskStatus>) -> TweakState {
     match &tweak.action {
         Action::Registry(ops) => {
             let mut all_match = true;
@@ -229,7 +250,7 @@ pub fn detect(tweak: &Tweak) -> TweakState {
         Action::ScheduledTasks(paths) => {
             let mut all_off = true;
             for p in paths {
-                match tasks::status(p) {
+                match task_states.get(*p).copied().unwrap_or(TaskStatus::Unknown) {
                     // Desactivee ou absente : rien a remonter pour cette tache.
                     TaskStatus::Disabled | TaskStatus::Absent => {}
                     TaskStatus::Enabled => all_off = false,

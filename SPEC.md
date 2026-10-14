@@ -39,6 +39,9 @@ La détection d'état, l'application et l'annulation en découlent.
   `Get/Disable/Enable-ScheduledTask` (sortie non localisée).
 - **v0.4** : regroupement par catégorie (sections repliables), « tout cocher /
   décocher » par catégorie, fenêtre de confirmation récapitulative avant application.
+- **v0.4.1** : détection des tâches planifiées regroupée en **un seul** appel
+  PowerShell (au lieu d'un lancement de processus par tâche), pour supprimer le
+  micro-gel de l'interface à l'ouverture et au rafraîchissement.
 - **v2 (à venir)** : point de restauration système, profils.
 - **Hors périmètre** : blocage réseau des domaines Microsoft (risque de
   perturber Windows Update / Store) — écarté par choix.
