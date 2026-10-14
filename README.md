@@ -34,6 +34,26 @@ réglages à son état antérieur.
 
 Les sauvegardes sont écrites dans `%LOCALAPPDATA%\Quietus\backups`.
 
+## Au premier lancement (SmartScreen)
+
+Le binaire n'est **pas signé numériquement**. Au premier lancement après
+téléchargement, Microsoft Defender **SmartScreen** affiche un avertissement
+« Windows a protégé votre PC / Éditeur inconnu ». C'est normal pour un outil
+open-source non signé ; le code source est public dans ce dépôt.
+
+Deux façons de passer l'avertissement :
+
+- **Débloquer le fichier** (recommandé) : clic droit sur `quietus.exe` →
+  **Propriétés** → cocher **« Débloquer »** → **OK**. Ou en PowerShell :
+  ```powershell
+  Unblock-File .\quietus.exe
+  ```
+- **Exécuter quand même** : sur l'écran SmartScreen, cliquer sur
+  **« Informations complémentaires »** puis **« Exécuter quand même »**.
+
+L'invite **administrateur** (UAC) jaune qui suit est, elle, **voulue** : l'outil
+a besoin des droits machine pour certains réglages.
+
 ## Portée (v1)
 
 Réglages de niveau **Sûr** et **Modéré**, tous réversibles, par le registre :
