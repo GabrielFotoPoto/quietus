@@ -283,3 +283,74 @@ pub fn apply(tweak: &Tweak) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn catalog_has_unique_non_empty_ids_and_metadata() {
+        let items = catalog();
+        assert!(!items.is_empty());
+        let mut seen = HashSet::new();
+        for t in &items {
+            assert!(!t.id.trim().is_empty(), "id vide");
+            assert!(seen.insert(t.id), "id duplique : {}", t.id);
+            assert!(!t.name.trim().is_empty(), "nom vide pour {}", t.id);
+            assert!(
+                !t.description.trim().is_empty(),
+                "description vide pour {}",
+                t.id
+            );
+            assert!(!t.impact.trim().is_empty(), "impact vide pour {}", t.id);
+        }
+    }
+
+    #[test]
+    fn security_task_paths_contain_no_powershell_injection_chars() {
+        let paths = all_task_paths();
+        assert!(!paths.is_empty());
+        for p in paths {
+            assert!(p.starts_with('\\'), "chemin de tache sans \\ initial : {p}");
+            assert!(!p.ends_with('\\'), "nom de tache vide dans : {p}");
+            // Securite : aucun caractere d'echappement ou d'interpolation PowerShell
+            for forbidden in ['\'', '"', '`', '$', ';', '|', '&', '\n', '\r'] {
+                assert!(
+                    !p.contains(forbidden),
+                    "caractere interdit ({forbidden:?}) dans le chemin de tache : {p}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn detect_scheduled_tasks_evaluates_states_correctly() {
+        let tweak = catalog()
+            .into_iter()
+            .find(|t| t.id == "feedback_tasks")
+            .expect("feedback_tasks present");
+
+        let mut map = HashMap::new();
+        // Absent de la table -> Unknown
+        assert_eq!(detect(&tweak, &map), TweakState::Unknown);
+
+        // Une tache Disabled + une Absent -> Disabled
+        map.insert(
+            r"\Microsoft\Windows\Feedback\Siuf\DmClient".to_string(),
+            TaskStatus::Disabled,
+        );
+        map.insert(
+            r"\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload".to_string(),
+            TaskStatus::Absent,
+        );
+        assert_eq!(detect(&tweak, &map), TweakState::Disabled);
+
+        // Si l'une est Enabled -> Enabled
+        map.insert(
+            r"\Microsoft\Windows\Feedback\Siuf\DmClient".to_string(),
+            TaskStatus::Enabled,
+        );
+        assert_eq!(detect(&tweak, &map), TweakState::Enabled);
+    }
+}

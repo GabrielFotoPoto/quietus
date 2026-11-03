@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  check-and-test:
+    name: Format, Clippy, Tests & Build (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verification du formatage (cargo fmt)
+        run: cargo fmt --all -- --check
+
+      - name: Analyse statique (cargo clippy)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Execution des tests unitaires et de securite
+        run: cargo test --verbose
+
+      - name: Verification qu'aucun tiret cadratin n'est present
+        shell: bash
+        run: |
+          if git grep -I $'\xe2\x80\x94' -- ':!.github/workflows/ci.yml'; then
+            echo "Erreur : tiret cadratin (U+2014) detecte."
+            exit 1
+          fi
+
+  security-audit:
+    name: Audit des dependances (cargo-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installation de cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
+      - name: RustSec Audit
+        run: cargo audit

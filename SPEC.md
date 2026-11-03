@@ -1,4 +1,4 @@
-# Spécification — Quietus
+# Spécification - Quietus
 
 ## Objectif
 
@@ -8,10 +8,10 @@ et laisser l'utilisateur décider.
 
 ## Principes directeurs
 
-1. Ne jamais casser l'OS — réglages documentés uniquement.
-2. Réversibilité totale — sauvegarde avant modification, restauration possible.
-3. Transparence — description, impact et risque pour chaque réglage.
-4. Consentement éclairé — aucune action sans choix explicite.
+1. Ne jamais casser l'OS - réglages documentés uniquement.
+2. Réversibilité totale - sauvegarde avant modification, restauration possible.
+3. Transparence - description, impact et risque pour chaque réglage.
+4. Consentement éclairé - aucune action sans choix explicite.
 5. Performance préservée.
 
 ## Architecture
@@ -33,7 +33,7 @@ La détection d'état, l'application et l'annulation en découlent.
 ## Périmètre
 
 - **v0.1** : réglages Sûr + Modéré, tout par le registre (y compris type de
-  démarrage des services), 100 % réversible — interface terminal (retirée).
+  démarrage des services), 100 % réversible - interface terminal (retirée).
 - **v0.2** : interface graphique (egui / eframe).
 - **v0.3** : tâches planifiées (CEIP, compatibilité, feedback) via les cmdlets
   `Get/Disable/Enable-ScheduledTask` (sortie non localisée).
@@ -44,7 +44,7 @@ La détection d'état, l'application et l'annulation en découlent.
   micro-gel de l'interface à l'ouverture et au rafraîchissement.
 - **v2 (à venir)** : point de restauration système, profils.
 - **Hors périmètre** : blocage réseau des domaines Microsoft (risque de
-  perturber Windows Update / Store) — écarté par choix.
+  perturber Windows Update / Store) - écarté par choix.
 
 ## Limites assumées
 

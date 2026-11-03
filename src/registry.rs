@@ -1,18 +1,29 @@
 //! Acces bas niveau au registre Windows, enveloppant la crate `winreg`.
 
 use crate::model::{Hive, RegData};
-use anyhow::{Context, Result};
+#[cfg(windows)]
+use anyhow::Context;
+use anyhow::Result;
+#[cfg(windows)]
 use winreg::enums::*;
+#[cfg(windows)]
 use winreg::RegKey;
 
 /// Verifie grossierement les droits administrateur en tentant d'ouvrir en ecriture
 /// une cle machine. Sans admin, les reglages HKLM echoueront.
+#[cfg(windows)]
 pub fn is_elevated() -> bool {
     RegKey::predef(HKEY_LOCAL_MACHINE)
         .open_subkey_with_flags(r"SOFTWARE\Microsoft", KEY_SET_VALUE)
         .is_ok()
 }
 
+#[cfg(not(windows))]
+pub fn is_elevated() -> bool {
+    false
+}
+
+#[cfg(windows)]
 fn root(hive: Hive) -> RegKey {
     match hive {
         Hive::Hklm => RegKey::predef(HKEY_LOCAL_MACHINE),
@@ -21,6 +32,7 @@ fn root(hive: Hive) -> RegKey {
 }
 
 /// Lit une valeur. Renvoie `None` si la cle ou la valeur n'existe pas.
+#[cfg(windows)]
 pub fn read(hive: Hive, subkey: &str, name: &str) -> Result<Option<RegData>> {
     let key = match root(hive).open_subkey(subkey) {
         Ok(k) => k,
@@ -46,7 +58,13 @@ pub fn read(hive: Hive, subkey: &str, name: &str) -> Result<Option<RegData>> {
     }
 }
 
+#[cfg(not(windows))]
+pub fn read(_hive: Hive, _subkey: &str, _name: &str) -> Result<Option<RegData>> {
+    Ok(None)
+}
+
 /// Ecrit une valeur, creant la cle au besoin.
+#[cfg(windows)]
 pub fn write(hive: Hive, subkey: &str, name: &str, data: &RegData) -> Result<()> {
     let (key, _) = root(hive)
         .create_subkey(subkey)
@@ -62,10 +80,21 @@ pub fn write(hive: Hive, subkey: &str, name: &str, data: &RegData) -> Result<()>
     Ok(())
 }
 
+#[cfg(not(windows))]
+pub fn write(_hive: Hive, _subkey: &str, _name: &str, _data: &RegData) -> Result<()> {
+    Ok(())
+}
+
 /// Supprime une valeur (utilise pour annuler quand elle n'existait pas avant).
+#[cfg(windows)]
 pub fn delete_value(hive: Hive, subkey: &str, name: &str) -> Result<()> {
     if let Ok(key) = root(hive).open_subkey_with_flags(subkey, KEY_SET_VALUE) {
         let _ = key.delete_value(name);
     }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn delete_value(_hive: Hive, _subkey: &str, _name: &str) -> Result<()> {
     Ok(())
 }

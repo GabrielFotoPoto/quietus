@@ -77,7 +77,8 @@ impl QuietusApp {
             match backup::capture(&self.rows[i].tweak) {
                 Ok(b) => backups.push(b),
                 Err(e) => {
-                    self.status = format!("Sauvegarde impossible pour {} : {e}", self.rows[i].tweak.id);
+                    self.status =
+                        format!("Sauvegarde impossible pour {} : {e}", self.rows[i].tweak.id);
                     return;
                 }
             }
@@ -105,7 +106,7 @@ impl QuietusApp {
                     "{count} reglage(s) applique(s). Sauvegarde : {}{}",
                     path.display(),
                     if reboot {
-                        "  —  redemarrage conseille."
+                        "  -  redemarrage conseille."
                     } else {
                         ""
                     }
@@ -125,7 +126,8 @@ impl QuietusApp {
                     }
                 }
                 self.refresh();
-                self.status = format!("Restauration : {ok} reglage(s) remis a leur etat anterieur.");
+                self.status =
+                    format!("Restauration : {ok} reglage(s) remis a leur etat anterieur.");
             }
             Ok(None) => self.status = "Aucune sauvegarde a restaurer.".into(),
             Err(e) => self.status = format!("Lecture de sauvegarde impossible : {e}"),
@@ -159,11 +161,13 @@ impl QuietusApp {
                     selected.len()
                 ));
                 ui.add_space(4.0);
-                egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
-                    for n in &selected {
-                        ui.label(format!("•  {n}"));
-                    }
-                });
+                egui::ScrollArea::vertical()
+                    .max_height(220.0)
+                    .show(ui, |ui| {
+                        for n in &selected {
+                            ui.label(format!("•  {n}"));
+                        }
+                    });
                 if reboot {
                     ui.add_space(4.0);
                     ui.colored_label(ORANGE, "Un redemarrage sera conseille apres application.");
@@ -201,7 +205,7 @@ impl eframe::App for QuietusApp {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.heading("Quietus");
-                ui.label("— telemetrie Windows 11 sous votre controle");
+                ui.label("- telemetrie Windows 11 sous votre controle");
             });
             if !self.elevated {
                 ui.colored_label(
@@ -216,10 +220,7 @@ impl eframe::App for QuietusApp {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 let n = self.selected_count();
-                if ui
-                    .button(format!("Appliquer la selection ({n})"))
-                    .clicked()
-                {
+                if ui.button(format!("Appliquer la selection ({n})")).clicked() {
                     if n > 0 {
                         self.confirm_open = true;
                     } else {

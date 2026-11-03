@@ -4,10 +4,12 @@
 
 use anyhow::{Context, Result};
 use std::collections::HashMap;
+#[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::process::Command;
 
 /// Empeche l'ouverture d'une fenetre console a chaque appel PowerShell.
+#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Etat d'une tache planifiee du point de vue de la telemetrie.
@@ -32,18 +34,18 @@ fn split(path: &str) -> (&str, &str) {
 }
 
 fn powershell(script: &str) -> Result<std::process::Output> {
-    Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            script,
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .context("lancement de PowerShell")
+    let mut cmd = Command::new("powershell");
+    cmd.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        script,
+    ]);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.output().context("lancement de PowerShell")
 }
 
 /// Traduit l'etat .NET (non localise) renvoye par PowerShell en `TaskStatus`.
@@ -126,4 +128,42 @@ pub fn enable(path: &str) -> Result<()> {
     );
     powershell(&script)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_separates_folder_and_task_name() {
+        let (folder, name) = split(r"\Microsoft\Windows\Autochk\Proxy");
+        assert_eq!(folder, r"\Microsoft\Windows\Autochk\");
+        assert_eq!(name, "Proxy");
+    }
+
+    #[test]
+    fn split_handles_root_or_bare_task_name() {
+        let (folder, name) = split(r"\RootTask");
+        assert_eq!(folder, r"\");
+        assert_eq!(name, "RootTask");
+
+        let (folder_bare, name_bare) = split("BareTask");
+        assert_eq!(folder_bare, r"\");
+        assert_eq!(name_bare, "BareTask");
+    }
+
+    #[test]
+    fn parse_state_maps_dotnet_states_correctly() {
+        assert_eq!(parse_state(""), TaskStatus::Absent);
+        assert_eq!(parse_state("Disabled"), TaskStatus::Disabled);
+        assert_eq!(parse_state("disabled"), TaskStatus::Disabled);
+        assert_eq!(parse_state("Ready"), TaskStatus::Enabled);
+        assert_eq!(parse_state("Running"), TaskStatus::Enabled);
+    }
+
+    #[test]
+    fn statuses_returns_empty_map_for_empty_slice() {
+        let map = statuses(&[]);
+        assert!(map.is_empty());
+    }
 }

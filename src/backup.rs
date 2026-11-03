@@ -2,8 +2,8 @@
 //! anterieur (valeurs de registre ou etat des taches), pour pouvoir tout annuler.
 
 use crate::model::{Action, Hive, RegData, Tweak};
-use crate::tasks::{self, TaskStatus};
 use crate::registry;
+use crate::tasks::{self, TaskStatus};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -123,7 +123,11 @@ pub fn restore(tb: &TweakBackup) -> Result<()> {
 /// Charge la derniere session de sauvegarde (pour « tout restaurer »).
 pub fn load_latest() -> Result<Option<Session>> {
     let dir = backup_dir()?;
-    let mut files: Vec<_> = std::fs::read_dir(&dir)?
+    load_latest_from(&dir)
+}
+
+fn load_latest_from(dir: &std::path::Path) -> Result<Option<Session>> {
+    let mut files: Vec<_> = std::fs::read_dir(dir)?
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| p.extension().map(|e| e == "json").unwrap_or(false))
         .collect();
@@ -134,5 +138,61 @@ pub fn load_latest() -> Result<Option<Session>> {
             Ok(Some(serde_json::from_slice(&data)?))
         }
         None => Ok(None),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn session_serialization_and_latest_selection_work_in_isolated_temp_dir() {
+        let tmp = std::env::temp_dir().join(format!("quietus-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).expect("creation dossier temp");
+
+        let s1 = Session {
+            created: "2026-10-01T10:00:00+02:00".to_string(),
+            tweaks: vec![TweakBackup {
+                tweak_id: "fictif_1".to_string(),
+                ops: vec![OpBackup::Registry {
+                    hive: Hive::Hkcu,
+                    subkey: r"Software\TestFictif".to_string(),
+                    name: "Enabled".to_string(),
+                    existed: false,
+                    previous: None,
+                }],
+            }],
+        };
+        let s2 = Session {
+            created: "2026-10-02T10:00:00+02:00".to_string(),
+            tweaks: vec![TweakBackup {
+                tweak_id: "fictif_2".to_string(),
+                ops: vec![OpBackup::Task {
+                    path: r"\TestFictif\Task".to_string(),
+                    was_enabled: true,
+                }],
+            }],
+        };
+
+        std::fs::write(
+            tmp.join("backup-20261001-100000.json"),
+            serde_json::to_vec_pretty(&s1).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.join("backup-20261002-100000.json"),
+            serde_json::to_vec_pretty(&s2).unwrap(),
+        )
+        .unwrap();
+
+        let loaded = load_latest_from(&tmp)
+            .expect("lecture")
+            .expect("session presente");
+        assert_eq!(loaded.tweaks.len(), 1);
+        assert_eq!(loaded.tweaks[0].tweak_id, "fictif_2");
+
+        // Nettoyage des donnees fictives de test
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
