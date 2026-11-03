@@ -1,6 +1,28 @@
-# Quietus
+<p align="center">
+  <img src="docs/logo/quietus.svg" alt="Logo Quietus" width="140" height="140">
+</p>
 
-Gestionnaire de telemetrie **Windows 11**, controle par l'utilisateur, en Rust.
+<h1 align="center">Quietus</h1>
+
+<p align="center">
+  Gestionnaire de telemetrie <b>Windows 11</b>, controle par l'utilisateur et <b>reversible</b>
+</p>
+
+<p align="center">
+  <a href="https://github.com/GabrielFotoPoto/quietus/actions/workflows/ci.yml"><img src="https://github.com/GabrielFotoPoto/quietus/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/GabrielFotoPoto/quietus/releases/latest"><img src="https://img.shields.io/github/v/release/GabrielFotoPoto/quietus?color=1d428a&label=version" alt="Derniere version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-d86018" alt="Licence MIT"></a>
+  <img src="https://img.shields.io/badge/plateforme-Windows%2011%20(x64)-1d428a" alt="Plateforme Windows 11">
+</p>
+
+<p align="center">
+  <a href="#utilisation">Utilisation</a> &middot;
+  <a href="#au-premier-lancement-smartscreen">SmartScreen</a> &middot;
+  <a href="CHANGELOG.md">Journal des modifications</a> &middot;
+  <a href="SPEC.md">Specification</a>
+</p>
+
+---
 
 *Quietus* : la mise au silence du bruit de fond que votre machine emet sans vous.
 

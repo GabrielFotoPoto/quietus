@@ -4,6 +4,7 @@
 
 mod backup;
 mod gui;
+mod icon;
 mod model;
 mod registry;
 mod tasks;
@@ -14,7 +15,8 @@ fn main() -> eframe::Result {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([920.0, 600.0])
             .with_min_inner_size([760.0, 460.0])
-            .with_title("Quietus"),
+            .with_title("Quietus")
+            .with_icon(icon::app_icon()),
         ..Default::default()
     };
     eframe::run_native(
