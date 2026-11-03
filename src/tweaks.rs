@@ -4,7 +4,7 @@
 use crate::model::*;
 use crate::registry;
 use crate::tasks::{self, TaskStatus};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::collections::HashMap;
 
 fn dword(hive: Hive, subkey: &'static str, name: &'static str, disable: u32) -> RegOp {
@@ -33,7 +33,7 @@ pub fn catalog() -> Vec<Tweak> {
             category: TelemetrieCoeur,
             risk: Sur,
             description: "Regle par strategie le niveau de donnees de diagnostic envoyees a Microsoft.",
-            impact: "Reduit la collecte au minimum. Sur une edition Pro, Windows maintient un socle « Requis » non supprimable par cette seule cle.",
+            impact: "Reduit la collecte au minimum. Sur une edition Pro, Windows maintient un socle ? Requis ? non supprimable par cette seule cle.",
             requires_reboot: false,
             action: reg(vec![dword(Hklm, r"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry", 0)]),
         },
@@ -173,7 +173,7 @@ pub fn catalog() -> Vec<Tweak> {
             name: "Suivi des lancements d'applications",
             category: ViePriveeUsage,
             risk: Sur,
-            description: "Suit les applications que tu ouvres pour « ameliorer les resultats de recherche ».",
+            description: "Suit les applications que tu ouvres pour ? ameliorer les resultats de recherche ?.",
             impact: "Le suivi cesse. Le menu Demarrer n'affiche plus les apps les plus utilisees.",
             requires_reboot: false,
             action: reg(vec![dword(Hkcu, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "Start_TrackProgs", 0)]),
@@ -197,7 +197,7 @@ pub fn catalog() -> Vec<Tweak> {
             category: Localisation,
             risk: Modere,
             description: "Autorise Windows et les applications a determiner ta position geographique.",
-            impact: "Desactive la localisation pour tout le systeme. Meteo, cartes et « Localiser mon appareil » ne fonctionneront plus.",
+            impact: "Desactive la localisation pour tout le systeme. Meteo, cartes et ? Localiser mon appareil ? ne fonctionneront plus.",
             requires_reboot: false,
             action: reg(vec![RegOp {
                 hive: Hklm,
@@ -267,6 +267,8 @@ pub fn detect(tweak: &Tweak, task_states: &HashMap<String, TaskStatus>) -> Tweak
 }
 
 /// Applique un reglage (desactive la telemetrie correspondante).
+/// Pour un groupe de taches planifiees, tente chaque tache et remonte les erreurs
+/// eventuelles (ex. tache protegee par TrustedInstaller) au lieu de les ignorer.
 pub fn apply(tweak: &Tweak) -> Result<()> {
     match &tweak.action {
         Action::Registry(ops) => {
@@ -275,11 +277,83 @@ pub fn apply(tweak: &Tweak) -> Result<()> {
             }
         }
         Action::ScheduledTasks(paths) => {
+            let mut errors = Vec::new();
             for p in paths {
-                // Best-effort : une tache absente est ignoree silencieusement.
-                let _ = tasks::disable(p);
+                if let Err(e) = tasks::disable(p) {
+                    errors.push(format!("{p} ({e})"));
+                }
+            }
+            if !errors.is_empty() {
+                bail!(
+                    "certaines taches ont refuse la desactivation : {}",
+                    errors.join("; ")
+                );
             }
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn catalog_has_unique_non_empty_ids_and_metadata() {
+        let items = catalog();
+        assert!(!items.is_empty());
+        let mut seen = HashSet::new();
+        for t in &items {
+            assert!(!t.id.trim().is_empty(), "id vide");
+            assert!(seen.insert(t.id), "id duplique : {}", t.id);
+            assert!(!t.name.trim().is_empty(), "nom vide pour {}", t.id);
+            assert!(
+                !t.description.trim().is_empty(),
+                "description vide pour {}",
+                t.id
+            );
+            assert!(!t.impact.trim().is_empty(), "impact vide pour {}", t.id);
+        }
+    }
+
+    #[test]
+    fn security_task_paths_contain_no_powershell_injection_chars() {
+        let paths = all_task_paths();
+        assert!(!paths.is_empty());
+        for p in paths {
+            tasks::validate_task_path(p)
+                .unwrap_or_else(|e| panic!("chemin du catalogue invalide {p} : {e}"));
+        }
+    }
+
+    #[test]
+    fn detect_scheduled_tasks_evaluates_states_correctly() {
+        let tweak = catalog()
+            .into_iter()
+            .find(|t| t.id == "feedback_tasks")
+            .expect("feedback_tasks present");
+
+        let mut map = HashMap::new();
+        // Absent de la table -> Unknown
+        assert_eq!(detect(&tweak, &map), TweakState::Unknown);
+
+        // Une tache Disabled + une Absent -> Disabled
+        map.insert(
+            r"\Microsoft\Windows\Feedback\Siuf\DmClient".to_string(),
+            TaskStatus::Disabled,
+        );
+        map.insert(
+            r"\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload".to_string(),
+            TaskStatus::Absent,
+        );
+        assert_eq!(detect(&tweak, &map), TweakState::Disabled);
+
+        // Si l'une est Enabled -> Enabled
+        map.insert(
+            r"\Microsoft\Windows\Feedback\Siuf\DmClient".to_string(),
+            TaskStatus::Enabled,
+        );
+        assert_eq!(detect(&tweak, &map), TweakState::Enabled);
+    }
 }
