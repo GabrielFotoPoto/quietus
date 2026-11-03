@@ -4,6 +4,11 @@ Toutes les modifications notables de **Quietus** sont documentees dans ce fichie
 
 ## [Non publie]
 
+### Fonctionnalites (Lot 3)
+- Ajout d'une fenetre **? Restaurer une sauvegarde ?** permettant de choisir quelle session restaurer parmi l'historique `%LOCALAPPDATA%\Quietus\backups`, de visualiser les reglages contenus dans chaque sauvegarde et de supprimer d'anciens fichiers de sauvegarde.
+- Ajout d'une option dans la fenetre de confirmation pour creer automatiquement un **point de restauration systeme Windows** (`Checkpoint-Computer`) avant d'appliquer les modifications.
+- Horodatage des fichiers de sauvegarde a la milliseconde (`backup-YYYYMMDD-HHMMSS-mmm.json`) pour eviter toute collision.
+
 ### Securite et robustesse (Lot 2)
 - Execution de `powershell.exe` via son chemin systeme absolu (`%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`) avec `-NoLogo` pour empecher tout detournement via le `PATH` en mode administrateur.
 - Validation stricte (`tasks::validate_task_path`) de tous les chemins de taches planifiees avant interpolation PowerShell (refus par defaut des caracteres d'injection).

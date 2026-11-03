@@ -1,90 +1,95 @@
 # Quietus
 
-Gestionnaire de télémétrie **Windows 11**, contrôlé par l'utilisateur, en Rust.
+Gestionnaire de telemetrie **Windows 11**, controle par l'utilisateur, en Rust.
 
-*Quietus* : la mise au silence du bruit de fond que votre machine émet sans vous.
+*Quietus* : la mise au silence du bruit de fond que votre machine emet sans vous.
 
-L'outil **liste** les mécanismes de remontée d'informations de Windows, **explique**
-pour chacun ce qu'il fait et ce que sa désactivation implique, puis laisse
-l'utilisateur **choisir** ce qu'il désactive. Chaque modification est
-**sauvegardée avant d'être appliquée** et **réversible**.
+L'outil **liste** les mecanismes de remontee d'informations de Windows, **explique**
+pour chacun ce qu'il fait et ce que sa desactivation implique, puis laisse
+l'utilisateur **choisir** ce qu'il desactive. Chaque modification est
+**sauvegardee avant d'etre appliquee** et **reversible**.
 
 ## Principes
 
-- **Ne casse pas l'OS** : uniquement des réglages documentés et compris.
-- **Réversibilité** : sauvegarde automatique de l'état antérieur, bouton « tout restaurer ».
-- **Transparence** : description + impact + niveau de risque pour chaque réglage.
-- **Consentement** : rien n'est appliqué sans action explicite de l'utilisateur.
+- **Ne casse pas l'OS** : uniquement des reglages documentes et compris.
+- **Reversibilite** : sauvegarde automatique de l'etat anterieur (JSON local + point de restauration systeme Windows optionnel), fenetre **? Restaurer... ?** permettant de choisir quelle session restaurer.
+- **Transparence** : description + impact + niveau de risque pour chaque reglage.
+- **Consentement** : rien n'est applique sans action explicite de l'utilisateur.
 
 ## Utilisation
 
-L'outil requiert les **droits administrateur** (demande d'élévation automatique) pour
-les réglages au niveau machine.
+L'outil requiert les **droits administrateur** (demande d'elevation automatique) pour
+les reglages au niveau machine.
 
 ```
 quietus.exe
 ```
 
-Une fenêtre s'ouvre : les réglages sont regroupés par catégorie dans des sections
-repliables (chacune avec un état et des boutons **Tout cocher / décocher**), et le
-détail du réglage sélectionné s'affiche à droite. Cochez ce que vous voulez
-désactiver puis cliquez sur **Appliquer la sélection** : une fenêtre récapitule la
-liste avant confirmation. Le bouton **Tout restaurer** remet le dernier lot de
-réglages à son état antérieur.
+Une fenetre s'ouvre : les reglages sont regroupes par categorie dans des sections
+repliables (chacune avec un etat et des boutons **Tout cocher / decocher**), et le
+detail du reglage selectionne s'affiche a droite. Cochez ce que vous voulez
+desactiver puis cliquez sur **Appliquer la selection** : une fenetre recapitule la
+liste avant confirmation (avec option de creer un point de restauration systeme
+Windows). Le bouton **Restaurer...** permet de choisir une sauvegarde anterieure
+pour remettre ses reglages a leur etat initial ou de supprimer d'anciennes
+sauvegardes.
 
-Les sauvegardes sont écrites dans `%LOCALAPPDATA%\Quietus\backups`.
+Les sauvegardes sont ecrites dans `%LOCALAPPDATA%\Quietus\backups`.
 
 ## Au premier lancement (SmartScreen)
 
-Le binaire n'est **pas signé numériquement**. Au premier lancement après
-téléchargement, Microsoft Defender **SmartScreen** affiche un avertissement
-« Windows a protégé votre PC / Éditeur inconnu ». C'est normal pour un outil
-open-source non signé ; le code source est public dans ce dépôt.
+Le binaire n'est **pas signe numeriquement**. Au premier lancement apres
+telechargement, Microsoft Defender **SmartScreen** affiche un avertissement
+? Windows a protege votre PC / Editeur inconnu ?. C'est normal pour un outil
+open-source non signe ; le code source est public dans ce depot.
 
-Deux façons de passer l'avertissement :
+Deux facons de passer l'avertissement :
 
-- **Débloquer le fichier** (recommandé) : clic droit sur `quietus.exe` →
-  **Propriétés** → cocher **« Débloquer »** → **OK**. Ou en PowerShell :
+- **Debloquer le fichier** (recommande) : clic droit sur `quietus.exe` ->
+  **Proprietes** -> cocher **? Debloquer ?** -> **OK**. Ou en PowerShell :
   ```powershell
   Unblock-File .\quietus.exe
   ```
-- **Exécuter quand même** : sur l'écran SmartScreen, cliquer sur
-  **« Informations complémentaires »** puis **« Exécuter quand même »**.
+- **Executer quand meme** : sur l'ecran SmartScreen, cliquer sur
+  **? Informations complementaires ?** puis **? Executer quand meme ?**.
 
 L'invite **administrateur** (UAC) jaune qui suit est, elle, **voulue** : l'outil
-a besoin des droits machine pour certains réglages.
+a besoin des droits machine pour certains reglages.
 
-## Portée (v1)
+## Portee
 
-Réglages de niveau **Sûr** et **Modéré**, tous réversibles, par le registre :
-télémétrie cœur (AllowTelemetry, service DiagTrack, dmwappushservice), rapports
-d'erreurs et feedback, identifiant de publicité et expériences personnalisées,
-suggestions du menu Démarrer, historique d'activité, suivi des lancements d'apps,
-personnalisation de la saisie, localisation.
+Reglages de niveau **Sur** et **Modere**, tous reversibles, par le registre ou les
+taches planifiees :
+telemetrie coeur (AllowTelemetry, service DiagTrack, dmwappushservice, taches CEIP
+et compatibilite), rapports d'erreurs et feedback, identifiant de publicite et
+experiences personnalisees, suggestions du menu Demarrer, historique d'activite,
+suivi des lancements d'apps, personnalisation de la saisie, localisation.
 
-> **Note d'honnêteté** : sur une édition **Pro**, la clé `AllowTelemetry` ne
-> descend pas officiellement à zéro (socle « Requis » maintenu par Microsoft) ;
-> la désactivation du service DiagTrack complète néanmoins fortement la mesure.
+> **Note d'honnetete** : sur une edition **Pro**, la cle `AllowTelemetry` ne
+> descend pas officiellement a zero (socle ? Requis ? maintenu par Microsoft) ;
+> la desactivation du service DiagTrack complete neanmoins fortement la mesure.
 
-## Compilation
+## Compilation et tests
 
-Binaire Windows produit par compilation croisée depuis Linux :
+Binaire Windows produit par compilation croisee depuis Linux :
 
-```
+```bash
+cargo test
+cargo clippy --target x86_64-pc-windows-gnu --all-targets -- -D warnings
 cargo build --release --target x86_64-pc-windows-gnu
 ```
 
 ## Avertissement
 
-Logiciel fourni « tel quel », sans garantie. Il modifie des réglages système de
+Logiciel fourni ? tel quel ?, sans garantie. Il modifie des reglages systeme de
 **votre propre machine**. Utilisez la fonction de restauration en cas de doute.
 
-## Développement
+## Developpement
 
-Ce projet a été développé avec l'assistance de l'intelligence artificielle
-**Claude** (Anthropic) : spécifications, conception et génération du code Rust.
-Les choix de conception, la validation et les tests restent sous la
-responsabilité de l'auteur du dépôt.
+Ce projet a ete developpe avec l'assistance de l'intelligence artificielle
+**Claude** (Anthropic) et **Gemini** (Google DeepMind) : specifications, conception
+et generation du code Rust. Les choix de conception, la validation et les tests
+restent sous la responsabilite de l'auteur du depot.
 
 ## Licence
 

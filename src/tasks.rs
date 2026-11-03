@@ -1,5 +1,5 @@
-//! Lecture et modification de l'etat des taches planifiees, via les cmdlets
-//! PowerShell (Get/Disable/Enable-ScheduledTask) dont la sortie n'est PAS
+//! Lecture et modification de l'etat des taches planifiees et creation de point
+//! de restauration systeme, via les cmdlets PowerShell dont la sortie n'est PAS
 //! localisee (noms d'enumeration .NET), contrairement a `schtasks`.
 
 use anyhow::{bail, Context, Result};
@@ -180,6 +180,19 @@ pub fn enable(path: &str) -> Result<()> {
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
         bail!("echec de reactivation de la tache {path} : {err}");
+    }
+    Ok(())
+}
+
+/// Cree un point de restauration systeme Windows avant d'appliquer des modifications.
+pub fn create_restore_point() -> Result<()> {
+    let script = "$ErrorActionPreference='Stop'; \
+                  Checkpoint-Computer -Description 'Quietus - avant modification telemetrie' \
+                  -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop";
+    let out = powershell(script)?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        bail!("echec de creation du point de restauration systeme : {err}");
     }
     Ok(())
 }

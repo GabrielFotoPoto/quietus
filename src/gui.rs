@@ -2,7 +2,7 @@
 //! metier : catalogue, detection, application et restauration restent inchanges.
 
 use crate::model::{Category, Tweak, TweakState};
-use crate::{backup, registry, tweaks};
+use crate::{backup, registry, tasks, tweaks};
 use eframe::egui;
 use egui::Color32;
 
@@ -21,6 +21,14 @@ pub struct QuietusApp {
     elevated: bool,
     /// La fenetre de confirmation avant application est-elle ouverte ?
     confirm_open: bool,
+    /// Creer un point de restauration systeme Windows avant d'appliquer ?
+    create_restore_point: bool,
+    /// La fenetre de choix de sauvegarde a restaurer est-elle ouverte ?
+    restore_open: bool,
+    /// Liste des sessions de sauvegarde disponibles.
+    backups_list: Vec<backup::BackupEntry>,
+    /// Index de la session selectionnee dans `backups_list`.
+    selected_backup: usize,
 }
 
 impl QuietusApp {
@@ -40,9 +48,13 @@ impl QuietusApp {
         Self {
             rows,
             focused: 0,
-            status: "Cochez des reglages, puis « Appliquer la selection ».".into(),
+            status: "Cochez des reglages, puis ? Appliquer la selection ?.".into(),
             elevated: registry::is_elevated(),
             confirm_open: false,
+            create_restore_point: true,
+            restore_open: false,
+            backups_list: Vec::new(),
+            selected_backup: 0,
         }
     }
 
@@ -66,7 +78,28 @@ impl QuietusApp {
         self.rows.iter().filter(|r| r.selected).count()
     }
 
+    fn tweak_name_by_id<'a>(&'a self, id: &'a str) -> &'a str {
+        self.rows
+            .iter()
+            .find(|r| r.tweak.id == id)
+            .map(|r| r.tweak.name)
+            .unwrap_or(id)
+    }
+
     fn apply_selected(&mut self) {
+        if self.selected_count() == 0 {
+            self.status = "Rien de selectionne.".into();
+            return;
+        }
+        if self.create_restore_point {
+            if let Err(e) = tasks::create_restore_point() {
+                self.status = format!(
+                    "Point de restauration impossible (decochez l'option ou activez la Protection du systeme) : {e}"
+                );
+                return;
+            }
+        }
+
         let mut backups = Vec::new();
         let mut applied = Vec::new();
         let mut reboot = false;
@@ -90,10 +123,6 @@ impl QuietusApp {
             applied.push(i);
         }
         let count = applied.len();
-        if count == 0 {
-            self.status = "Rien de selectionne.".into();
-            return;
-        }
         // Re-detection groupee : un seul appel PowerShell pour toutes les taches.
         let states = tweaks::task_states();
         for &i in &applied {
@@ -116,21 +145,62 @@ impl QuietusApp {
         }
     }
 
-    fn restore_latest(&mut self) {
-        match backup::load_latest() {
-            Ok(Some(session)) => {
-                let mut ok = 0;
-                for tb in &session.tweaks {
-                    if backup::restore(tb).is_ok() {
-                        ok += 1;
-                    }
+    fn open_restore_window(&mut self) {
+        match backup::list_sessions() {
+            Ok(list) => {
+                if list.is_empty() {
+                    self.status = "Aucune sauvegarde a restaurer.".into();
+                } else {
+                    self.backups_list = list;
+                    self.selected_backup = 0;
+                    self.restore_open = true;
                 }
-                self.refresh();
-                self.status =
-                    format!("Restauration : {ok} reglage(s) remis a leur etat anterieur.");
             }
-            Ok(None) => self.status = "Aucune sauvegarde a restaurer.".into(),
-            Err(e) => self.status = format!("Lecture de sauvegarde impossible : {e}"),
+            Err(e) => self.status = format!("Lecture des sauvegardes impossible : {e}"),
+        }
+    }
+
+    fn restore_selected_session(&mut self) {
+        let Some(entry) = self.backups_list.get(self.selected_backup).cloned() else {
+            return;
+        };
+        let mut ok = 0;
+        let mut errs = Vec::new();
+        for tb in &entry.session.tweaks {
+            match backup::restore(tb) {
+                Ok(()) => ok += 1,
+                Err(e) => errs.push(format!("{} ({e})", tb.tweak_id)),
+            }
+        }
+        self.refresh();
+        if errs.is_empty() {
+            self.status = format!(
+                "Restauration ({}) : {ok} reglage(s) remis a leur etat anterieur.",
+                entry.session.created
+            );
+        } else {
+            self.status = format!(
+                "Restauration partielle ({ok} ok) ; erreurs : {}",
+                errs.join(", ")
+            );
+        }
+    }
+
+    fn delete_selected_backup(&mut self) {
+        let Some(entry) = self.backups_list.get(self.selected_backup).cloned() else {
+            return;
+        };
+        match backup::delete_backup(&entry.path) {
+            Ok(()) => {
+                self.status = format!("Sauvegarde supprimee : {}", entry.filename);
+                self.backups_list.remove(self.selected_backup);
+                if self.backups_list.is_empty() {
+                    self.restore_open = false;
+                } else if self.selected_backup >= self.backups_list.len() {
+                    self.selected_backup = self.backups_list.len() - 1;
+                }
+            }
+            Err(e) => self.status = format!("Suppression impossible : {e}"),
         }
     }
 
@@ -162,16 +232,22 @@ impl QuietusApp {
                 ));
                 ui.add_space(4.0);
                 egui::ScrollArea::vertical()
-                    .max_height(220.0)
+                    .max_height(200.0)
                     .show(ui, |ui| {
                         for n in &selected {
-                            ui.label(format!("•  {n}"));
+                            ui.label(format!("?  {n}"));
                         }
                     });
                 if reboot {
                     ui.add_space(4.0);
                     ui.colored_label(ORANGE, "Un redemarrage sera conseille apres application.");
                 }
+                ui.separator();
+                ui.checkbox(
+                    &mut self.create_restore_point,
+                    "Creer un point de restauration systeme Windows avant d'agir",
+                );
+                ui.small("(en plus de la sauvegarde JSON locale automatique)");
                 ui.separator();
                 ui.horizontal(|ui| {
                     if ui.button("Confirmer").clicked() {
@@ -186,6 +262,76 @@ impl QuietusApp {
         if do_apply {
             self.apply_selected();
             self.confirm_open = false;
+        }
+    }
+
+    fn restore_window(&mut self, ctx: &egui::Context) {
+        if !self.restore_open {
+            return;
+        }
+        let mut do_restore = false;
+        let mut do_delete = false;
+        let mut do_close = false;
+
+        egui::Window::new("Restaurer une sauvegarde")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                ui.label("Choisissez la session a restaurer :");
+                ui.add_space(4.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("backups_scroll")
+                    .max_height(150.0)
+                    .show(ui, |ui| {
+                        for (idx, entry) in self.backups_list.iter().enumerate() {
+                            let suffix = if idx == 0 { " (plus recente)" } else { "" };
+                            let label = format!(
+                                "{} - {} reglage(s){suffix}",
+                                entry.session.created,
+                                entry.session.tweaks.len()
+                            );
+                            ui.radio_value(&mut self.selected_backup, idx, label);
+                        }
+                    });
+
+                ui.separator();
+                if let Some(entry) = self.backups_list.get(self.selected_backup) {
+                    ui.label("Reglages contenus dans cette sauvegarde :");
+                    ui.add_space(4.0);
+                    egui::ScrollArea::vertical()
+                        .id_salt("tweaks_preview_scroll")
+                        .max_height(150.0)
+                        .show(ui, |ui| {
+                            for tb in &entry.session.tweaks {
+                                let name = self.tweak_name_by_id(&tb.tweak_id);
+                                ui.label(format!("?  {} ({})", tb.tweak_id, name));
+                            }
+                        });
+                }
+
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.button("Restaurer cette session").clicked() {
+                        do_restore = true;
+                    }
+                    if ui.button("Supprimer ce fichier").clicked() {
+                        do_delete = true;
+                    }
+                    if ui.button("Fermer").clicked() {
+                        do_close = true;
+                    }
+                });
+            });
+
+        if do_restore {
+            self.restore_selected_session();
+            self.restore_open = false;
+        } else if do_delete {
+            self.delete_selected_backup();
+        } else if do_close {
+            self.restore_open = false;
         }
     }
 }
@@ -210,7 +356,7 @@ impl eframe::App for QuietusApp {
             if !self.elevated {
                 ui.colored_label(
                     Color32::from_rgb(220, 80, 80),
-                    "Droits administrateur manquants : les reglages « machine » echoueront. Relancez en administrateur.",
+                    "Droits administrateur manquants : les reglages ? machine ? echoueront. Relancez en administrateur.",
                 );
             }
             ui.add_space(4.0);
@@ -227,8 +373,8 @@ impl eframe::App for QuietusApp {
                         self.status = "Rien de selectionne.".into();
                     }
                 }
-                if ui.button("Tout restaurer").clicked() {
-                    self.restore_latest();
+                if ui.button("Restaurer...").clicked() {
+                    self.open_restore_window();
                 }
                 if ui.button("Rafraichir les etats").clicked() {
                     self.refresh();
@@ -303,5 +449,6 @@ impl eframe::App for QuietusApp {
         });
 
         self.confirm_window(ctx);
+        self.restore_window(ctx);
     }
 }
