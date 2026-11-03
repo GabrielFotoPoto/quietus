@@ -2,7 +2,7 @@
 
 Toutes les modifications notables de **Quietus** sont documentees dans ce fichier.
 
-## [Non publie]
+## [0.5.0] - 2026-11-03
 
 ### Fonctionnalites (Lot 3)
 - Ajout d'une fenetre **? Restaurer une sauvegarde ?** permettant de choisir quelle session restaurer parmi l'historique `%LOCALAPPDATA%\Quietus\backups`, de visualiser les reglages contenus dans chaque sauvegarde et de supprimer d'anciens fichiers de sauvegarde.
