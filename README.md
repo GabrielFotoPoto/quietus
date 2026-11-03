@@ -13,11 +13,13 @@
   <a href="https://github.com/GabrielFotoPoto/quietus/releases/latest"><img src="https://img.shields.io/github/v/release/GabrielFotoPoto/quietus?color=1d428a&label=version" alt="Derniere version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-d86018" alt="Licence MIT"></a>
   <img src="https://img.shields.io/badge/plateforme-Windows%2011%20(x64)-1d428a" alt="Plateforme Windows 11">
+  <img src="https://img.shields.io/badge/approche-vibe%20coding%20(Claude%20%2B%20Gemini)-50b450" alt="Vibe coding Claude + Gemini">
 </p>
 
 <p align="center">
   <a href="#utilisation">Utilisation</a> &middot;
   <a href="#au-premier-lancement-smartscreen">SmartScreen</a> &middot;
+  <a href="#developpement-vibe-coding">Vibe coding</a> &middot;
   <a href="CHANGELOG.md">Journal des modifications</a> &middot;
   <a href="SPEC.md">Specification</a>
 </p>
@@ -106,12 +108,17 @@ cargo build --release --target x86_64-pc-windows-gnu
 Logiciel fourni ? tel quel ?, sans garantie. Il modifie des reglages systeme de
 **votre propre machine**. Utilisez la fonction de restauration en cas de doute.
 
-## Developpement
+## Developpement (Vibe coding)
 
-Ce projet a ete developpe avec l'assistance de l'intelligence artificielle
-**Claude** (Anthropic) et **Gemini** (Google DeepMind) : specifications, conception
-et generation du code Rust. Les choix de conception, la validation et les tests
-restent sous la responsabilite de l'auteur du depot.
+Par transparence, ce projet est integralement realise en **vibe coding** avec
+l'assistance des modeles d'intelligence artificielle **Claude** (Anthropic) et
+**Gemini** (Google DeepMind) : redaction des specifications, conception de
+l'architecture, generation du code Rust, des tests unitaires et de l'integration
+continue.
+
+Le cadrage fonctionnel, les exigences de securite (*Security by design*) et de
+confidentialite (*Privacy by design*), la revue de chaque lot et la validation en
+conditions reelles sur Windows 11 sont assures par l'auteur du depot.
 
 ## Licence
 
