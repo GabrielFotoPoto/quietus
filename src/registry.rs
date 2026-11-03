@@ -3,7 +3,7 @@
 use crate::model::{Hive, RegData};
 #[cfg(windows)]
 use anyhow::Context;
-use anyhow::Result;
+use anyhow::{bail, Result};
 #[cfg(windows)]
 use winreg::enums::*;
 #[cfg(windows)]
@@ -31,7 +31,17 @@ fn root(hive: Hive) -> RegKey {
     }
 }
 
+/// Decode un DWORD (4 octets little-endian) de facon stricte.
+pub fn decode_dword_bytes(bytes: &[u8], name: &str) -> Result<u32> {
+    let arr: [u8; 4] = bytes.try_into().map_err(|_| {
+        anyhow::anyhow!("taille DWORD invalide ({} octets) pour {name}", bytes.len())
+    })?;
+    Ok(u32::from_le_bytes(arr))
+}
+
 /// Lit une valeur. Renvoie `None` si la cle ou la valeur n'existe pas.
+/// Renvoie une erreur explicite si le type de valeur n'est ni DWORD ni SZ/EXPAND_SZ
+/// (evite d'ecraser un binaire ou QWORD avec une chaine vide dans une sauvegarde).
 #[cfg(windows)]
 pub fn read(hive: Hive, subkey: &str, name: &str) -> Result<Option<RegData>> {
     let key = match root(hive).open_subkey(subkey) {
@@ -41,17 +51,17 @@ pub fn read(hive: Hive, subkey: &str, name: &str) -> Result<Option<RegData>> {
     match key.get_raw_value(name) {
         Ok(v) => match v.vtype {
             REG_DWORD => {
-                let n = u32::from_le_bytes(
-                    v.bytes
-                        .get(0..4)
-                        .and_then(|s| s.try_into().ok())
-                        .unwrap_or([0, 0, 0, 0]),
-                );
+                let n = decode_dword_bytes(&v.bytes, name)?;
                 Ok(Some(RegData::Dword(n)))
             }
-            _ => {
-                let s: String = key.get_value(name).unwrap_or_default();
+            REG_SZ | REG_EXPAND_SZ => {
+                let s: String = key
+                    .get_value(name)
+                    .with_context(|| format!("lecture SZ {subkey}\\{name}"))?;
                 Ok(Some(RegData::Sz(s)))
+            }
+            other => {
+                bail!("type de valeur registre non supporte ({other:?}) pour {subkey}\\{name}")
             }
         },
         Err(_) => Ok(None),
@@ -60,6 +70,8 @@ pub fn read(hive: Hive, subkey: &str, name: &str) -> Result<Option<RegData>> {
 
 #[cfg(not(windows))]
 pub fn read(_hive: Hive, _subkey: &str, _name: &str) -> Result<Option<RegData>> {
+    let _ = bail!("non supporte hors Windows");
+    #[allow(unreachable_code)]
     Ok(None)
 }
 
@@ -97,4 +109,17 @@ pub fn delete_value(hive: Hive, subkey: &str, name: &str) -> Result<()> {
 #[cfg(not(windows))]
 pub fn delete_value(_hive: Hive, _subkey: &str, _name: &str) -> Result<()> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_dword_bytes_accepts_4_bytes_and_rejects_invalid_sizes() {
+        assert_eq!(decode_dword_bytes(&[4, 0, 0, 0], "Start").unwrap(), 4);
+        assert!(decode_dword_bytes(&[], "Vide").is_err());
+        assert!(decode_dword_bytes(&[1, 2], "TropCourt").is_err());
+        assert!(decode_dword_bytes(&[1, 2, 3, 4, 5, 6, 7, 8], "Qword").is_err());
+    }
 }

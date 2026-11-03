@@ -2,15 +2,21 @@
 //! PowerShell (Get/Disable/Enable-ScheduledTask) dont la sortie n'est PAS
 //! localisee (noms d'enumeration .NET), contrairement a `schtasks`.
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+use std::path::PathBuf;
 use std::process::Command;
 
 /// Empeche l'ouverture d'une fenetre console a chaque appel PowerShell.
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Caracteres interdits dans un chemin de tache planifiee (refus par defaut contre l'injection PowerShell).
+const FORBIDDEN_CHARS: [char; 12] = [
+    '\'', '"', '`', '$', ';', '|', '&', '<', '>', '\n', '\r', '\0',
+];
 
 /// Etat d'une tache planifiee du point de vue de la telemetrie.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,6 +31,30 @@ pub enum TaskStatus {
     Unknown,
 }
 
+/// Valide strictement un chemin de tache planifiee avant toute interpolation PowerShell.
+pub fn validate_task_path(path: &str) -> Result<()> {
+    if !path.starts_with('\\') || path.ends_with('\\') || path.len() < 2 {
+        bail!("chemin de tache planifiee invalide : {path}");
+    }
+    if let Some(c) = path.chars().find(|c| FORBIDDEN_CHARS.contains(c)) {
+        bail!("caractere interdit ({c:?}) dans le chemin de tache : {path}");
+    }
+    Ok(())
+}
+
+/// Retourne le chemin absolu vers `powershell.exe` dans System32 pour eviter
+/// tout detournement via le `PATH` lors d'une execution avec droits administrateur.
+fn powershell_executable() -> PathBuf {
+    let root = std::env::var_os("SystemRoot")
+        .or_else(|| std::env::var_os("WINDIR"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
+    root.join("System32")
+        .join("WindowsPowerShell")
+        .join("v1.0")
+        .join("powershell.exe")
+}
+
 /// Separe un chemin complet en (dossier avec backslash final, nom de tache).
 fn split(path: &str) -> (&str, &str) {
     match path.rfind('\\') {
@@ -34,8 +64,9 @@ fn split(path: &str) -> (&str, &str) {
 }
 
 fn powershell(script: &str) -> Result<std::process::Output> {
-    let mut cmd = Command::new("powershell");
+    let mut cmd = Command::new(powershell_executable());
     cmd.args([
+        "-NoLogo",
         "-NoProfile",
         "-NonInteractive",
         "-ExecutionPolicy",
@@ -63,6 +94,9 @@ fn parse_state(s: &str) -> TaskStatus {
 
 /// Lit l'etat courant d'une seule tache planifiee (utilise a la sauvegarde).
 pub fn status(path: &str) -> TaskStatus {
+    if validate_task_path(path).is_err() {
+        return TaskStatus::Unknown;
+    }
     let (folder, name) = split(path);
     let script = format!(
         "$ErrorActionPreference='SilentlyContinue'; (Get-ScheduledTask -TaskPath '{folder}' -TaskName '{name}').State"
@@ -84,14 +118,16 @@ pub fn statuses(paths: &[&str]) -> HashMap<String, TaskStatus> {
     if paths.is_empty() {
         return result;
     }
-    // Liste de chemins litterale, entre apostrophes (aucun chemin ne contient
-    // d'apostrophe). PowerShell construit une table etat-par-chemin complet,
-    // puis emet « chemin<TAB>etat » pour chacun de nos chemins.
-    let list = paths
-        .iter()
-        .map(|p| format!("'{p}'"))
-        .collect::<Vec<_>>()
-        .join(",");
+    let mut valid_paths = Vec::with_capacity(paths.len());
+    for &p in paths {
+        if validate_task_path(p).is_ok() {
+            valid_paths.push(format!("'{p}'"));
+        }
+    }
+    if valid_paths.is_empty() {
+        return result;
+    }
+    let list = valid_paths.join(",");
     let script = format!(
         "$ErrorActionPreference='SilentlyContinue'; \
          $m=@{{}}; Get-ScheduledTask | ForEach-Object {{ $m[$_.TaskPath + $_.TaskName] = $_.State }}; \
@@ -110,23 +146,41 @@ pub fn statuses(paths: &[&str]) -> HashMap<String, TaskStatus> {
     result
 }
 
-/// Desactive une tache (sans effet si absente). Best-effort.
+/// Desactive une tache (sans effet si absente, erreur explicite si verrouillee par l'OS).
 pub fn disable(path: &str) -> Result<()> {
+    validate_task_path(path)?;
     let (folder, name) = split(path);
     let script = format!(
-        "$ErrorActionPreference='SilentlyContinue'; Disable-ScheduledTask -TaskPath '{folder}' -TaskName '{name}' | Out-Null"
+        "$ErrorActionPreference='Stop'; \
+         $t = Get-ScheduledTask -TaskPath '{folder}' -TaskName '{name}' -ErrorAction SilentlyContinue; \
+         if ($null -ne $t -and $t.State -ne 'Disabled') {{ \
+             Disable-ScheduledTask -InputObject $t -ErrorAction Stop | Out-Null \
+         }}"
     );
-    powershell(&script)?;
+    let out = powershell(&script)?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        bail!("echec de desactivation de la tache {path} : {err}");
+    }
     Ok(())
 }
 
 /// Reactive une tache (utilise par la restauration).
 pub fn enable(path: &str) -> Result<()> {
+    validate_task_path(path)?;
     let (folder, name) = split(path);
     let script = format!(
-        "$ErrorActionPreference='SilentlyContinue'; Enable-ScheduledTask -TaskPath '{folder}' -TaskName '{name}' | Out-Null"
+        "$ErrorActionPreference='Stop'; \
+         $t = Get-ScheduledTask -TaskPath '{folder}' -TaskName '{name}' -ErrorAction SilentlyContinue; \
+         if ($null -ne $t -and $t.State -eq 'Disabled') {{ \
+             Enable-ScheduledTask -InputObject $t -ErrorAction Stop | Out-Null \
+         }}"
     );
-    powershell(&script)?;
+    let out = powershell(&script)?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        bail!("echec de reactivation de la tache {path} : {err}");
+    }
     Ok(())
 }
 
@@ -165,5 +219,37 @@ mod tests {
     fn statuses_returns_empty_map_for_empty_slice() {
         let map = statuses(&[]);
         assert!(map.is_empty());
+    }
+
+    #[test]
+    fn security_validate_task_path_rejects_injection_and_malformed_paths() {
+        assert!(validate_task_path(r"\Microsoft\Windows\Autochk\Proxy").is_ok());
+
+        for bad in [
+            "",
+            r"\",
+            r"Microsoft\SansBackslashInitial",
+            r"\Microsoft\DossierSansNom\",
+            r"\Microsoft\Task'; Start-Process calc; '",
+            r"\Microsoft\Task$(whoami)",
+            "\\Microsoft\\Task\nCalc",
+            r"\Microsoft\Task|Out-File",
+            r"\Microsoft\Task&whoami",
+        ] {
+            assert!(
+                validate_task_path(bad).is_err(),
+                "le chemin malveillant ou malforme aurait du etre rejete : {bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn security_powershell_executable_uses_absolute_system32_path() {
+        let exe = powershell_executable();
+        let s = exe.to_string_lossy();
+        assert!(
+            s.ends_with(r"System32\WindowsPowerShell\v1.0\powershell.exe")
+                || s.ends_with("System32/WindowsPowerShell/v1.0/powershell.exe")
+        );
     }
 }

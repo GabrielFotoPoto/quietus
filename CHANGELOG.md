@@ -4,8 +4,14 @@ Toutes les modifications notables de **Quietus** sont documentees dans ce fichie
 
 ## [Non publie]
 
+### Securite et robustesse (Lot 2)
+- Execution de `powershell.exe` via son chemin systeme absolu (`%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`) avec `-NoLogo` pour empecher tout detournement via le `PATH` en mode administrateur.
+- Validation stricte (`tasks::validate_task_path`) de tous les chemins de taches planifiees avant interpolation PowerShell (refus par defaut des caracteres d'injection).
+- Verification du code de retour et remontee explicite des erreurs lorsque Windows refuse la desactivation ou reactivation d'une tache existante (`Disable/Enable-ScheduledTask`).
+- Verification stricte des types de valeurs dans `registry::read` : seuls `REG_DWORD` (exactement 4 octets) et `REG_SZ`/`REG_EXPAND_SZ` sont acceptes ; tout autre type renvoie une erreur explicite au lieu d'etre converti silencieusement en chaine vide.
+
 ### Qualite, tests et hygiene (Lot 1)
-- Ajout d'une suite de tests unitaires et de securite (`tweaks`, `tasks`, `backup` en repertoire temporaire isole).
+- Ajout d'une suite de tests unitaires et de securite (`tweaks`, `tasks`, `registry`, `backup` en repertoire temporaire isole).
 - Ajout du workflow d'integration continue GitHub Actions (`cargo fmt --check`, `cargo clippy`, `cargo test`, `cargo audit`).
 - Harmonisation typographique : remplacement de tous les tirets cadratins par le trait d'union `-` dans l'ensemble du depot.
 - Creation de ce fichier `CHANGELOG.md`.
@@ -20,7 +26,7 @@ Toutes les modifications notables de **Quietus** sont documentees dans ce fichie
 
 ### Interface utilisateur
 - Regroupement des reglages par categorie dans des sections repliables.
-- Ajout des boutons « Tout cocher » et « Tout decocher » par categorie.
+- Ajout des boutons ? Tout cocher ? et ? Tout decocher ? par categorie.
 - Ajout d'une fenetre modale de confirmation recapitulative avant toute application.
 
 ## [0.3.1] - 2026-10-13

@@ -4,7 +4,7 @@
 use crate::model::*;
 use crate::registry;
 use crate::tasks::{self, TaskStatus};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::collections::HashMap;
 
 fn dword(hive: Hive, subkey: &'static str, name: &'static str, disable: u32) -> RegOp {
@@ -33,7 +33,7 @@ pub fn catalog() -> Vec<Tweak> {
             category: TelemetrieCoeur,
             risk: Sur,
             description: "Regle par strategie le niveau de donnees de diagnostic envoyees a Microsoft.",
-            impact: "Reduit la collecte au minimum. Sur une edition Pro, Windows maintient un socle « Requis » non supprimable par cette seule cle.",
+            impact: "Reduit la collecte au minimum. Sur une edition Pro, Windows maintient un socle ? Requis ? non supprimable par cette seule cle.",
             requires_reboot: false,
             action: reg(vec![dword(Hklm, r"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry", 0)]),
         },
@@ -173,7 +173,7 @@ pub fn catalog() -> Vec<Tweak> {
             name: "Suivi des lancements d'applications",
             category: ViePriveeUsage,
             risk: Sur,
-            description: "Suit les applications que tu ouvres pour « ameliorer les resultats de recherche ».",
+            description: "Suit les applications que tu ouvres pour ? ameliorer les resultats de recherche ?.",
             impact: "Le suivi cesse. Le menu Demarrer n'affiche plus les apps les plus utilisees.",
             requires_reboot: false,
             action: reg(vec![dword(Hkcu, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "Start_TrackProgs", 0)]),
@@ -197,7 +197,7 @@ pub fn catalog() -> Vec<Tweak> {
             category: Localisation,
             risk: Modere,
             description: "Autorise Windows et les applications a determiner ta position geographique.",
-            impact: "Desactive la localisation pour tout le systeme. Meteo, cartes et « Localiser mon appareil » ne fonctionneront plus.",
+            impact: "Desactive la localisation pour tout le systeme. Meteo, cartes et ? Localiser mon appareil ? ne fonctionneront plus.",
             requires_reboot: false,
             action: reg(vec![RegOp {
                 hive: Hklm,
@@ -267,6 +267,8 @@ pub fn detect(tweak: &Tweak, task_states: &HashMap<String, TaskStatus>) -> Tweak
 }
 
 /// Applique un reglage (desactive la telemetrie correspondante).
+/// Pour un groupe de taches planifiees, tente chaque tache et remonte les erreurs
+/// eventuelles (ex. tache protegee par TrustedInstaller) au lieu de les ignorer.
 pub fn apply(tweak: &Tweak) -> Result<()> {
     match &tweak.action {
         Action::Registry(ops) => {
@@ -275,9 +277,17 @@ pub fn apply(tweak: &Tweak) -> Result<()> {
             }
         }
         Action::ScheduledTasks(paths) => {
+            let mut errors = Vec::new();
             for p in paths {
-                // Best-effort : une tache absente est ignoree silencieusement.
-                let _ = tasks::disable(p);
+                if let Err(e) = tasks::disable(p) {
+                    errors.push(format!("{p} ({e})"));
+                }
+            }
+            if !errors.is_empty() {
+                bail!(
+                    "certaines taches ont refuse la desactivation : {}",
+                    errors.join("; ")
+                );
             }
         }
     }
@@ -312,15 +322,8 @@ mod tests {
         let paths = all_task_paths();
         assert!(!paths.is_empty());
         for p in paths {
-            assert!(p.starts_with('\\'), "chemin de tache sans \\ initial : {p}");
-            assert!(!p.ends_with('\\'), "nom de tache vide dans : {p}");
-            // Securite : aucun caractere d'echappement ou d'interpolation PowerShell
-            for forbidden in ['\'', '"', '`', '$', ';', '|', '&', '\n', '\r'] {
-                assert!(
-                    !p.contains(forbidden),
-                    "caractere interdit ({forbidden:?}) dans le chemin de tache : {p}"
-                );
-            }
+            tasks::validate_task_path(p)
+                .unwrap_or_else(|e| panic!("chemin du catalogue invalide {p} : {e}"));
         }
     }
 
